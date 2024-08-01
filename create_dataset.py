@@ -11,8 +11,10 @@ import albumentations as A
 import plistlib
 from skimage.draw import polygon
 
-DCM_PATH = 'INbreast Release 1.0/AllDICOMs/'
-XML_PATH = 'INbreast Release 1.0/AllXML/'
+inbreast_database_path = "/mnt/seagate/INbreast Release 1.0/"
+
+DCM_PATH = inbreast_database_path + 'AllDICOMs/'
+XML_PATH = inbreast_database_path + 'AllXML/'
 
 MASS_PATIENT_ID = ['53586896', '22580192', '22614236', '22580098', '24055445', '30011674', '20586934', '22670465', '24055502', '22670673', '20587612', '22614568', '20587902', '22614522', '50995789', '24055464', '20588216', '51049053', '53582656', '20588562', '27829188', '22614431', '22580341', '22613822', '24065584', '50997515', '51049107', '22580367', '22580244', '50996352', '22670147', '22580732', '50999008', '24065707', '22614127', '20588334', '20588536', '24065530', '22670324', '20586908', '30011507', '27829134', '53581406', '50998981', '20586986', '22678787', '50997461', '53580804', '22579730', '22670094', '53580858', '53586869', '50995762', '24065251', '20587810', '53581460', '22670855', '22580706', '30011553', '22670809', '22580419', '24055355', '53587014', '50994408', '22614379', '22670278', '24065289', '22614074', '24055274', '22670511', '50994354', '20587928', '22580393', '22580654', '20588046', '50994273', '20587758', '24065761', '22427751', '20587664', '50999432', '22580680', '22580038', '53587663', '20588308', '20588680', '30011727', '22678833', '22427705', '22614266', '22613650', '50999459', '24055483', '22678694', '20587994', '22678646', '53582683', '20586960', '51048765', '22670620', '22613770', '22427840', '20588190', '53586960', '50996406', '22613702', '51048738']
 
@@ -146,13 +148,13 @@ def clahe(img, clip):
     cl = clahe.apply(np.array(img*255, dtype=np.uint8))
     return cl
 
-def synthetized_images(patient_id):
+def synthesized_images(patient_id):
     """
     Create a 3-channel image composed of the truncated and normalized image,
     the contrast enhanced image with clip limit 1, 
     and the contrast enhanced image with clip limit 2 
     @patient_id : patient id to recover image and mask in the dataset
-    return: numpy array of the breast region, numpy array of the synthetized images, numpy array of the masses mask
+    return: numpy array of the breast region, numpy array of the synthesized images, numpy array of the masses mask
     """
     image_path = glob.glob(os.path.join(DCM_PATH,str(patient_id)+'*.dcm'))[0]
     mass_mask = load_inbreast_mask(os.path.join(XML_PATH,str(patient_id)+'.xml'))
@@ -160,87 +162,146 @@ def synthetized_images(patient_id):
     pixel_array_numpy = ds.pixel_array
 
     breast, mask, mass_mask = crop(pixel_array_numpy, mass_mask)
+
+    # breast_01 = (breast - np.min(breast)) / (np.max(breast) - np.min(breast))
+    breast_01 = (pixel_array_numpy - np.min(pixel_array_numpy)) / (np.max(pixel_array_numpy) - np.min(pixel_array_numpy))
+
+    breast_255 = breast_01 * 255
+    breast_255 = breast_255.astype(np.int16)
+    # cv2.imwrite(os.path.join(dest_folder + '/image preprocessing/', '%d_breast255.png' % cntr), breast_255)
+
+    # cv2.imwrite(os.path.join(dest_folder + '/image preprocessing/', '%d_breast.png' % cntr), breast)
+    # cv2.imwrite(os.path.join(dest_folder + '/image preprocessing/', '%d_mask.png' % cntr), mask)
+    # cv2.imwrite(os.path.join(dest_folder + '/image preprocessing/', '%d_mass_mask.png' % cntr), mass_mask)
     normalized = truncation_normalization(breast, mask)
+    # cv2.imwrite(os.path.join(dest_folder + '/image preprocessing/', '%d_normalized.png' % cntr), normalized)
 
     cl1 = clahe(normalized, 1.0)
     cl2 = clahe(normalized, 2.0)
 
-    synthetized = cv2.merge((np.array(normalized*255, dtype=np.uint8),cl1,cl2))
-    return breast, synthetized, mass_mask
+    synthesized = cv2.merge((np.array(normalized*255, dtype=np.uint8),cl1,cl2))
+    return breast, breast_255, synthesized, mass_mask
 
 
 if __name__ == "__main__":
-    train_set, test_set = train_test_split(MASS_PATIENT_ID, test_size = 0.1, random_state=seed)
-    train_set, val_set = train_test_split(train_set, test_size = 0.11, random_state=seed)
 
-    shutil.rmtree('data/', ignore_errors = True) 
-    Path('data/obj').mkdir(parents=True, exist_ok=True)
-    Path('data/test').mkdir(parents=True, exist_ok=True) #test is val in yolo
-    Path('data/unseen').mkdir(parents=True, exist_ok=True)
+    # !!!
+    # edit the path with 'with' or 'without' to choose the corresponding dataset:
+    # !!!
+    dest_folder = "INBreast Dataset (without preprocessing)/"
 
-    cntr = 0
+    train_set, test_set = train_test_split(MASS_PATIENT_ID, test_size = 0.3, random_state=seed)
+    train_set, val_set = train_test_split(train_set, test_size = (0.2/0.7), random_state=seed)
 
-    for patient_id in train_set:
-        original, synthetized, mass_mask = synthetized_images(patient_id)
-        width = 800
-        height = min(int(synthetized.shape[0] * 800 / synthetized.shape[1]), 1333)
-        dim = (width, height) 
+    shutil.rmtree(dest_folder, ignore_errors = True)
+    Path(dest_folder + 'train').mkdir(parents=True, exist_ok=True)
+    Path(dest_folder + 'valid').mkdir(parents=True, exist_ok=True)
+    Path(dest_folder + 'test').mkdir(parents=True, exist_ok=True)
+    Path(dest_folder + 'image preprocessing').mkdir(parents=True, exist_ok=True)
+
+    subsets = ["train", "valid", "test"]
+
+    for subset in subsets:
+
+        if subset == "train":
+            cntr = 0
+            subset_set = train_set
+        elif subset == "valid":
+            cntr = 52
+            subset_set = val_set
+        elif subset == "test":
+            cntr = 74
+            subset_set = test_set
 
 
-        synthetized = cv2.resize(synthetized, dim, interpolation = cv2.INTER_AREA) 
-        mass_mask = cv2.resize(mass_mask, dim, interpolation = cv2.INTER_NEAREST) 
+        for patient_id in subset_set:
+            # if patient_id == "20588680":
+            #     print()
+            original, original_255, synthesized, mass_mask = synthesized_images(patient_id)
 
-        bboxes = mask_to_yolo(mass_mask)
-  
-        for i in range(8):
-            transformed = transform(image=synthetized, bboxes=bboxes)
-            transformed_image = transformed['image']
-            transformed_bboxes = transformed['bboxes']
-            if transformed_bboxes != []:
-                txt = bbox_to_txt(transformed_bboxes)
-                cv2.imwrite(os.path.join('data/obj/', '%d.png'%cntr), transformed_image)
+            width = 800
+            height = min(int(synthesized.shape[0] * 800 / synthesized.shape[1]), 1333)
+            dim = (width, height)
 
-                txt_file = open(os.path.join('data/obj/', '%d.txt'%cntr), "w")
-                txt_file.write(txt)
-                txt_file.close()
-                cntr+=1
 
-    for patient_id in val_set:
-        original, synthetized, mass_mask = synthetized_images(patient_id)
+            synthesized = cv2.resize(synthesized, dim, interpolation = cv2.INTER_AREA)
+            mass_mask = cv2.resize(mass_mask, dim, interpolation = cv2.INTER_NEAREST)
 
-        width = 800
-        height = min(int(synthetized.shape[0] * 800 / synthetized.shape[1]), 1333)
-        dim = (width, height) 
+            bboxes = mask_to_yolo(mass_mask)
 
-        synthetized = cv2.resize(synthetized, dim, interpolation = cv2.INTER_AREA) 
-        mass_mask = cv2.resize(mass_mask, dim, interpolation = cv2.INTER_NEAREST) 
-        txt = bbox_to_txt(mask_to_yolo(mass_mask))
-        cv2.imwrite(os.path.join('data/test/', '%d.png'%cntr), synthetized)
+            # for i in range(8):
+            #     transformed = transform(image=synthesized, bboxes=bboxes)
+            #     transformed_image = transformed['image']
+            #     transformed_bboxes = transformed['bboxes']
+            #     if transformed_bboxes != []:
+            txt = bbox_to_txt(bboxes)
 
-        txt_file = open(os.path.join('data/test/', '%d.txt'%cntr), "w")
-        txt_file.write(txt)
-        txt_file.close()
-        cntr+=1
+            if "with "in dest_folder:
+                cv2.imwrite(os.path.join(dest_folder + subset + '/', 'inbreast_mass_%d.png' % cntr), synthesized)
+            elif "without " in dest_folder:
+                cv2.imwrite(os.path.join(dest_folder + subset + '/', 'inbreast_mass_%d.png' % cntr), original_255)
+            else:
+                print("check your dest_folder choice")
+                break
 
-    #same code as for val set
-    for patient_id in test_set:
-        original, synthetized, mass_mask = synthetized_images(patient_id)
+            cv2.imwrite(os.path.join(dest_folder + 'image preprocessing/', 'inbreast_mass_%d_original.png' % cntr), original)
+            cv2.imwrite(os.path.join(dest_folder + 'image preprocessing/', 'inbreast_mass_%d_synthesized.png' % cntr), synthesized)
+            cv2.imwrite(os.path.join(dest_folder + 'image preprocessing/', 'inbreast_mass_%d_trunc-norm.png' % cntr), synthesized[:, :, 0])
+            cv2.imwrite(os.path.join(dest_folder + 'image preprocessing/', 'inbreast_mass_%d_cl1.png' % cntr), synthesized[:, :, 1])
+            cv2.imwrite(os.path.join(dest_folder + 'image preprocessing/', 'inbreast_mass_%d_cl2.png' % cntr), synthesized[:, :, 2])
 
-        width = 800
-        height = min(int(synthetized.shape[0] * 800 / synthetized.shape[1]), 1333)
-        dim = (width, height) 
+            txt_file = open(os.path.join(dest_folder + subset + '/', 'inbreast_mass_%d.txt' % cntr), "w")
+            txt_file.write(txt)
+            txt_file.close()
+            cntr+=1
 
-        synthetized = cv2.resize(synthetized, dim, interpolation = cv2.INTER_AREA) 
-        mass_mask = cv2.resize(mass_mask, dim, interpolation = cv2.INTER_NEAREST) 
-        txt = bbox_to_txt(mask_to_yolo(mass_mask))
-        cv2.imwrite(os.path.join('data/unseen/', '%d.png'%cntr), synthetized)
-
-        txt_file = open(os.path.join('data/unseen/', '%d.txt'%cntr), "w")
-        txt_file.write(txt)
-        txt_file.close()
-        cntr+=1
+    # for patient_id in val_set:
+    #     original, synthesized, mass_mask = synthesized_images(patient_id)
+    #
+    #     width = 800
+    #     height = min(int(synthesized.shape[0] * 800 / synthesized.shape[1]), 1333)
+    #     dim = (width, height)
+    #
+    #     synthesized = cv2.resize(synthesized, dim, interpolation = cv2.INTER_AREA)
+    #     mass_mask = cv2.resize(mass_mask, dim, interpolation = cv2.INTER_NEAREST)
+    #     txt = bbox_to_txt(mask_to_yolo(mass_mask))
+    #     cv2.imwrite(os.path.join(dest_folder + '/valid/', 'inbreast_mass_%d.png' % cntr), synthesized)
+    #
+    #     cv2.imwrite(os.path.join(dest_folder + '/image preprocessing/', '%d_synthesized.png' % cntr), synthesized)
+    #
+    #     cv2.imwrite(os.path.join(dest_folder + '/image preprocessing/', '%d_synthesized_trunc-norm.png' % cntr), synthesized[:, :, 0])
+    #     cv2.imwrite(os.path.join(dest_folder + '/image preprocessing/', '%d_synthesized_cl1.png' % cntr), synthesized[:, :, 1])
+    #     cv2.imwrite(os.path.join(dest_folder + '/image preprocessing/', '%d_synthesized_cl2.png' % cntr), synthesized[:, :, 2])
+    #
+    #     txt_file = open(os.path.join(dest_folder + '/valid/', 'inbreast_mass_%d.txt' % cntr), "w")
+    #     txt_file.write(txt)
+    #     txt_file.close()
+    #     cntr+=1
+    #
+    # #same code as for val set
+    # for patient_id in test_set:
+    #     original, synthesized, mass_mask = synthesized_images(patient_id)
+    #
+    #     width = 800
+    #     height = min(int(synthesized.shape[0] * 800 / synthesized.shape[1]), 1333)
+    #     dim = (width, height)
+    #
+    #     synthesized = cv2.resize(synthesized, dim, interpolation = cv2.INTER_AREA)
+    #     mass_mask = cv2.resize(mass_mask, dim, interpolation = cv2.INTER_NEAREST)
+    #     txt = bbox_to_txt(mask_to_yolo(mass_mask))
+    #     cv2.imwrite(os.path.join(dest_folder + '/test/', 'inbreast_mass_%d.png' % cntr), synthesized)
+    #
+    #     cv2.imwrite(os.path.join(dest_folder + '/image preprocessing/', '%d_synthesized.png' % cntr), synthesized)
+    #     cv2.imwrite(os.path.join(dest_folder + '/image preprocessing/', '%d_synthesized_trunc-norm.png' % cntr), synthesized[:, :, 0])
+    #     cv2.imwrite(os.path.join(dest_folder + '/image preprocessing/', '%d_synthesized_cl1.png' % cntr), synthesized[:, :, 1])
+    #     cv2.imwrite(os.path.join(dest_folder + '/image preprocessing/', '%d_synthesized_cl2.png' % cntr), synthesized[:, :, 2])
+    #
+    #     txt_file = open(os.path.join(dest_folder + '/test/', 'inbreast_mass_%d.txt' % cntr), "w")
+    #     txt_file.write(txt)
+    #     txt_file.close()
+    #     cntr+=1
 
 # labelImg
-classes_txt = open('data/classes.txt', "w")
+classes_txt = open(dest_folder + '/classes.txt', "w")
 classes_txt.write('mass')
 classes_txt.close()
