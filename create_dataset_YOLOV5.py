@@ -10,9 +10,7 @@ subsets = ["train", "valid", "test"]
 
 for subset in subsets:
 
-    # !!!
     # edit the path with 'with' or 'without' to choose the corresponding dataset:
-    # !!!
     source_folder = "INBreast Dataset (without preprocessing)/" + str(subset) + "/"
 
     if "with " in source_folder:

@@ -30,9 +30,6 @@ for subset in subsets:
         img_0 = plt.imread(image_file)
         print()
 
-    # img_path = "/home/lazaros/PycharmProjects/Breast_Mass_Detection/breast_mass_detection/INBreast Dataset (with transforms)/train/inbreast_mass_1.png"
-    # name = img_path[-19:-4]
-    # img_0 = plt.imread(img_path)
 
 
         txt_file = image_file[:-4] + ".txt"
@@ -65,12 +62,5 @@ for subset in subsets:
 
                 plt.savefig(dest_folder + name + '_box_' + str(cntr) + '.png')
 
-                # ax.imsave("/saves/data.png")
                 cntr += 1
                 print(myline)
-
-
-# figure, ax = plt.subplots(1)
-# rect = patches.Rectangle((125,100),50,25, edgecolor='r', facecolor="none")
-# ax.imshow(img_0)
-# ax.add_patch(rect)

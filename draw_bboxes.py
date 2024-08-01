@@ -9,9 +9,7 @@ subsets = ["train", "valid", "test"]
 
 for subset in subsets:
 
-    # !!!
     # edit the path with 'with' or 'without' to choose the corresponding dataset:
-    # !!!
     source_folder = "INBreast Dataset (without preprocessing)/" + str(subset) + "/"
 
     if "with " in source_folder:
@@ -33,16 +31,7 @@ for subset in subsets:
     for image_file in image_files:
         name = image_file[-19:-4]
         img_0 = plt.imread(image_file)
-        #
-        # img_0 = img_0 * 255
-        # img_0 = img_0.astype(np.int16)
-        #
         print()
-
-    # img_path = "/home/lazaros/PycharmProjects/Breast_Mass_Detection/breast_mass_detection/INBreast Dataset (with transforms)/train/inbreast_mass_1.png"
-    # name = img_path[-19:-4]
-    # img_0 = plt.imread(img_path)
-
 
         txt_file = image_file[:-4] + ".txt"
 
@@ -74,12 +63,5 @@ for subset in subsets:
 
                 plt.savefig(dest_folder + name + '_box_' + str(cntr) + '.png')
 
-                # ax.imsave("/saves/data.png")
                 cntr += 1
                 print(myline)
-
-
-# figure, ax = plt.subplots(1)
-# rect = patches.Rectangle((125,100),50,25, edgecolor='r', facecolor="none")
-# ax.imshow(img_0)
-# ax.add_patch(rect)
